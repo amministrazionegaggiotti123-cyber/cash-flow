@@ -970,11 +970,9 @@ async function syncToDB() {
   const btn = document.getElementById('btn-sync');
   btn.textContent = '⏳ Caricamento…'; btn.disabled = true;
   try {
-    // Cancella tutto e reinserisce — evita duplicati garantito
-    const { error: d1 } = await sb.from('scadenzario').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (d1) throw d1;
-    const { error: d2 } = await sb.from('fatture_vendita').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (d2) throw d2;
+    // Svuota entrambe le tabelle via RPC (truncate sicuro)
+    const { error: dErr } = await sb.rpc('truncate_import_tables');
+    if (dErr) throw dErr;
 
     // Inserisce in blocchi da 100 per sicurezza
     const scadRows = D.scad.map(toDBScad);
