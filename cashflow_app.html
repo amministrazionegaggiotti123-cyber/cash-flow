@@ -982,7 +982,13 @@ async function syncToDB() {
       const { error } = await sb.from('scadenzario').insert(scadRows.slice(i, i + 100));
       if (error) throw error;
     }
-    const fattRows = D.fatt.filter(r => r._totale > 0).map(toDBFatt);
+    const seenFatt = new Set();
+    const fattRows = D.fatt.filter(r => {
+      if (r._totale <= 0) return false;
+      const k = `${r._nfatt}|${toISO(r._data)||''}`;
+      if (seenFatt.has(k)) return false;
+      seenFatt.add(k); return true;
+    }).map(toDBFatt);
     for (let i = 0; i < fattRows.length; i += 100) {
       const { error } = await sb.from('fatture_vendita').insert(fattRows.slice(i, i + 100));
       if (error) throw error;
