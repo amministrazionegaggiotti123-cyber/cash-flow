@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cash Flow – Gaggiotti Drilling Tools</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --sidebar-bg: #0f172a;
+      --sidebar-w: 230px;
+      --accent: #3b82f6;
+      --accent-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --danger: #ef4444;
+      --danger-light: #fef2f2;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      background: var(--sidebar-bg);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .logo {
+      padding: 22px 18px 18px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .logo h1 { color: #fff; font-size: 15px; font-weight: 700; line-height: 1.3; }
+    .logo span { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    #sidebar nav { flex: 1; padding: 14px 0; }
+    #sidebar nav a {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 18px;
+      color: rgba(255,255,255,.55);
+      text-decoration: none; font-size: 13.5px; cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    #sidebar nav a:hover { color: #fff; background: rgba(255,255,255,.05); }
+    #sidebar nav a.active { color: #fff; background: rgba(59,130,246,.15); border-left-color: var(--accent); }
+    #sidebar nav a .ic { font-size: 15px; width: 18px; text-align: center; }
+    .sf { padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.25); font-size: 11px; }
+    /* ── Main ── */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #topbar {
+      background: #fff; border-bottom: 1px solid var(--border);
+      padding: 14px 26px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    #topbar h2 { font-size: 17px; font-weight: 600; }
+    #topbar .dt { color: var(--muted); font-size: 13px; }
+    #content { flex: 1; overflow-y: auto; padding: 24px; }
+    /* ── Views ── */
+    .view { display: none; }
+    .view.active { display: block; }
+    /* ── KPI Cards ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 20px; }
+    .kpi { background: #fff; border-radius: 10px; padding: 18px 20px; border: 1px solid var(--border); }
+    .kpi.blue  { border-left: 4px solid var(--accent); }
+    .kpi.green { border-left: 4px solid var(--success); }
+    .kpi.orange{ border-left: 4px solid var(--warning); }
+    .kpi.red   { border-left: 4px solid var(--danger); }
+    .kpi .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+    .kpi .val { font-size: 22px; font-weight: 700; }
+    .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    /* ── Cards ── */
+    .card { background: #fff; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 18px; }
+    .ch { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .ch h3 { font-size: 14px; font-weight: 600; }
+    .cb { padding: 18px; }
+    .chart-box { position: relative; height: 260px; }
+    .chart-box-lg { position: relative; height: 300px; }
+    /* ── Tables ── */
+    .filters {
+      display: flex; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border);
+      flex-wrap: wrap; align-items: center;
+    }
+    .filters select, .filters input[type=text] {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 12.5px; color: var(--text); background: #fff;
+    }
+    .filters label { font-size: 12.5px; color: var(--muted); }
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    thead th {
+      background: #f8fafc; padding: 9px 12px; text-align: left;
+      font-weight: 600; color: var(--muted); font-size: 11px;
+      text-transform: uppercase; letter-spacing: .3px;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f1f5f9; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td { padding: 9px 12px; white-space: nowrap; }
+    .tfoot { padding: 10px 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; }
+    /* ── Badges ── */
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .bg-green  { background: var(--success-light); color: var(--success); }
+    .bg-orange { background: var(--warning-light); color: var(--warning); }
+    .bg-red    { background: var(--danger-light); color: var(--danger); }
+    .bg-blue   { background: var(--accent-light); color: var(--accent); }
+    .bg-gray   { background: #f1f5f9; color: var(--muted); }
+    /* ── Buttons ── */
+    .btn { display: inline-block; padding: 7px 16px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger  { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-sm { padding: 4px 10px; font-size: 11.5px; }
+    input[type="file"] { display: none; }
+    /* ── Import ── */
+    .import-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 18px; }
+    .icard {
+      background: #fff; border: 2px dashed var(--border); border-radius: 12px;
+      padding: 28px 22px; text-align: center; cursor: pointer; transition: all .2s;
+    }
+    .icard:hover { border-color: var(--accent); background: var(--accent-light); }
+    .icard .ic2 { font-size: 36px; margin-bottom: 10px; }
+    .icard h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .icard p { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+    /* ── Potere acquisto ── */
+    .calc-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .calc-row .fld { display: flex; flex-direction: column; gap: 4px; }
+    .calc-row label { font-size: 11.5px; color: var(--muted); }
+    .calc-row input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+    .calc-res { margin-top: 14px; padding: 14px; border-radius: 8px; font-size: 14px; font-weight: 600; display: none; }
+    .calc-res.ok   { background: var(--success-light); color: var(--success); }
+    .calc-res.warn { background: var(--warning-light); color: var(--warning); }
+    .calc-res.nok  { background: var(--danger-light); color: var(--danger); }
+    /* ── Layout helpers ── */
+    .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+    .upcoming { max-height: 220px; overflow-y: auto; }
+    .up-row { padding: 9px 16px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
+    .up-row:last-child { border-bottom: none; }
+    .cf-total-row { background: #f8fafc; font-weight: 700; border-top: 2px solid var(--border) !important; }
+    .empty { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+<div id="sidebar">
+  <div class="logo">
+    <h1>Cash Flow</h1>
+    <span>Gaggiotti Drilling Tools</span>
+  </div>
+  <nav>
+    <a class="active" onclick="nav('dashboard')"><span class="ic">📊</span> Dashboard</a>
+    <a onclick="nav('scadenzario')"><span class="ic">📅</span> Scadenzario Incassi</a>
+    <a onclick="nav('fatture')"><span class="ic">🧾</span> Fatture Vendita</a>
+    <a onclick="nav('cashflow')"><span class="ic">📈</span> Cash Flow Mensile</a>
+    <a onclick="nav('import')"><span class="ic">📂</span> Importa Dati</a>
+  </nav>
+  <div class="sf">v1.0 · 2026</div>
+</div>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════════════════════ -->
+<div id="main">
+  <div id="topbar">
+    <h2 id="pg-title">Dashboard</h2>
+    <span class="dt" id="today"></span>
+  </div>
+  <div id="content">
+
+    <!-- ── DASHBOARD ──────────────────────────────────────────────────────── -->
+    <div id="view-dashboard" class="view active">
+      <div class="kpi-grid">
+        <div class="kpi blue">
+          <div class="lbl">Totale Scadenzario</div>
+          <div class="val" id="k-tot">—</div>
+          <div class="sub" id="k-nrate">0 rate</div>
+        </div>
+        <div class="kpi green">
+          <div class="lbl">Incassato</div>
+          <div class="val" id="k-inc">—</div>
+          <div class="sub" id="k-pct">0%</div>
+        </div>
+        <div class="kpi orange">
+          <div class="lbl">Da Incassare</div>
+          <div class="val" id="k-da">—</div>
+          <div class="sub" id="k-nopen">0 rate aperte</div>
+        </div>
+        <div class="kpi red">
+          <div class="lbl">Scadenze Prossimi 30 gg</div>
+          <div class="val" id="k-30">—</div>
+          <div class="sub" id="k-n30">0 rate</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="ch"><h3>Cash Flow Mensile 2026</h3></div>
+          <div class="cb"><div class="chart-box"><canvas id="ch-dash"></canvas></div></div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:18px">
+            <div class="ch"><h3>Prossime Scadenze</h3></div>
+            <div class="upcoming" id="upcoming"></div>
+          </div>
+          <div class="card">
+            <div class="ch"><h3>💡 Potere d'Acquisto</h3></div>
+            <div class="cb">
+              <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Verifica la liquidità disponibile in un periodo.</p>
+              <div class="calc-row">
+                <div class="fld"><label>Dal</label><input type="date" id="c-from"></div>
+                <div class="fld"><label>Al</label><input type="date" id="c-to"></div>
+                <div class="fld"><label>Importo necessario (€)</label><input type="number" id="c-amt" placeholder="es. 50000" style="width:140px"></div>
+                <button class="btn btn-primary" onclick="calcPotere()">Verifica</button>
+              </div>
+              <div class="calc-res" id="c-res"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SCADENZARIO ────────────────────────────────────────────────────── -->
+    <div id="view-scadenzario" class="view">
+      <div class="card">
+        <div class="filters">
+          <label>Mese:</label>
+          <select id="sf-mese" onchange="drawScad()"><option value="">Tutti</option></select>
+          <label>Stato:</label>
+          <select id="sf-stato" onchange="drawScad()">
+            <option value="">Tutti</option>
+            <option value="SI">Incassato</option>
+            <option value="NO">Da incassare</option>
+          </select>
+          <label>Categoria:</label>
+          <select id="sf-cat" onchange="drawScad()"><option value="">Tutte</option></select>
+          <input type="text" id="sf-q" placeholder="🔍 Cerca cliente / fattura…" oninput="drawScad()" style="margin-left:auto;min-width:200px">
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>N. Fatt.</th><th>Data Fatt.</th><th>Cliente</th><th>Cat.</th>
+                <th>Pagam.</th><th>Rata</th><th>Scadenza</th>
+                <th style="text-align:right">Importo</th><th>Stato</th><th>Data Incasso</th>
+              </tr>
+            </thead>
+            <tbody id="scad-tb"></tbody>
+          </table>
+        </div>
+        <div class="tfoot">
+          <span id="scad-cnt">0 righe</span>
+          <span id="scad-tot" style="font-weight:700;color:var(--text)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FATTURE ────────────────────────────────────────────────────────── -->
+    <div id="view-fatture" class="view">
+      <div class="card">
+        <div class="filters">
+          <label>Categoria:</label>
+          <select id="ff-cat" onchange="drawFatt()"><option value="">Tutte</option></select>
+          <label>Mese:</label>
+          <select id="ff-mese" onchange="drawFatt()"><option value="">Tutti</option></select>
+          <input type="text" id="ff-q" placeholder="🔍 Cerca cliente / fattura…" oninput="drawFatt()" style="margin-left:auto;min-width:200px">
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cat.</th><th>N. Fatt.</th><th>Data</th><th>Codice</th><th>Cliente</th>
+                <th>Pagam.</th>
+                <th style="text-align:right">Imponibile</th>
+                <th style="text-align:right">IVA</th>
+                <th style="text-align:right">Totale Doc.</th>
+                <th style="text-align:right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody id="fatt-tb"></tbody>
+          </table>
+        </div>
+        <div class="tfoot">
+          <span id="fatt-cnt">0 fatture</span>
+          <span id="fatt-tot" style="font-weight:700;color:var(--text)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CASH FLOW MENSILE ──────────────────────────────────────────────── -->
+    <div id="view-cashflow" class="view">
+      <div class="card">
+        <div class="ch"><h3>Andamento Cumulato 2026</h3></div>
+        <div class="cb"><div class="chart-box-lg"><canvas id="ch-cf"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="ch"><h3>Dettaglio per Mese</h3></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mese</th>
+                <th style="text-align:right;color:var(--muted)">Atteso (€)</th>
+                <th style="text-align:right;color:var(--success)">Incassato (€)</th>
+                <th style="text-align:right;color:var(--warning)">Da Incassare (€)</th>
+                <th style="text-align:right">Rate</th>
+              </tr>
+            </thead>
+            <tbody id="cf-tb"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── IMPORTA DATI ───────────────────────────────────────────────────── -->
+    <div id="view-import" class="view">
+      <div class="import-grid">
+        <div class="icard" onclick="document.getElementById('fi-scad').click()">
+          <div class="ic2">📅</div>
+          <h3>Scadenzario Incassi</h3>
+          <p>File CSV o Excel con le rate d'incasso.<br>Colonne: N.Fatt., Scadenza, Importo Rata, Incassato…</p>
+          <button class="btn btn-primary">Seleziona file</button>
+          <input type="file" id="fi-scad" accept=".csv,.xlsx,.xls" onchange="importScad(this)">
+          <div id="st-scad" style="margin-top:10px;font-size:12.5px"></div>
+        </div>
+        <div class="icard" onclick="document.getElementById('fi-fatt').click()">
+          <div class="ic2">🧾</div>
+          <h3>Fatture Vendita</h3>
+          <p>File Excel con il registro fatture.<br>Colonne: N. Fattura, Data, Cliente, Imponibile, IVA…</p>
+          <button class="btn btn-primary">Seleziona file</button>
+          <input type="file" id="fi-fatt" accept=".xlsx,.xls,.csv" onchange="importFatt(this)">
+          <div id="st-fatt" style="margin-top:10px;font-size:12.5px"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px">
+        <div class="ch">
+          <h3>Dati attualmente caricati</h3>
+          <button class="btn btn-danger btn-sm" onclick="clearAll()">Cancella tutto</button>
+        </div>
+        <div class="cb" id="imp-summary"><p style="color:var(--muted);font-size:13px">Nessun dato caricato.</p></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// Embedded data (pre-loaded from file system – 2026-05-07)
+// ════════════════════════════════════════════════════════════════════════════
+const SCAD_DATA = [{"nfatt":"1","datafatt":"19/01/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","cat":"Italia","pagam":"BON","rata":"","scad":"19/01/2026","importo":3015,"incassato":"SI","dataincasso":"26/01/2026","note":""},{"nfatt":"600001","datafatt":"21/01/2026","codcli":"D0437","cliente":"SOLSIF MAROC SA","cat":"Extra UE","pagam":"CAD","rata":"","scad":"21/01/2026","importo":22130,"incassato":"SI","dataincasso":"26/02/2026","note":""},{"nfatt":"2","datafatt":"23/01/2026","codcli":"C0282","cliente":"FEDBART SRLS","cat":"Italia","pagam":"BON","rata":"","scad":"23/01/2026","importo":36490.79,"incassato":"SI","dataincasso":"26/02/2026","note":""},{"nfatt":"3","datafatt":"23/01/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","cat":"Italia","pagam":"BON","rata":"","scad":"23/01/2026","importo":23558.2,"incassato":"SI","dataincasso":"26/01/2026","note":""},{"nfatt":"500002","datafatt":"09/02/2026","codcli":"D0419","cliente":"HUNTRAC KERESKEDELMI KORLATOLT","cat":"UE","pagam":"EPA","rata":"","scad":"29/01/2026","importo":397.5,"incassato":"SI","dataincasso":"29/01/2026","note":""},{"nfatt":"4","datafatt":"30/01/2026","codcli":"C0308","cliente":"FRANCUCCI SRL","cat":"Italia","pagam":"BON","rata":"","scad":"30/01/2026","importo":369.66,"incassato":"SI","dataincasso":"26/01/2026","note":""},{"nfatt":"5","datafatt":"30/01/2026","codcli":"C0282","cliente":"FEDBART SRLS","cat":"Italia","pagam":"BON","rata":"","scad":"30/01/2026","importo":30074.61,"incassato":"SI","dataincasso":"03/02/2026","note":""},{"nfatt":"500001","datafatt":"09/01/2026","codcli":"D0417","cliente":"MALTA PILING & DRILLING","cat":"UE","pagam":"EB1","rata":"","scad":"09/02/2026","importo":6628,"incassato":"SI","dataincasso":"15/01/2026","note":""},{"nfatt":"500004","datafatt":"25/02/2026","codcli":"D0116","cliente":"SARL CAZES JACQUES","cat":"UE","pagam":"FCC","rata":"1","scad":"09/02/2026","importo":2823,"incassato":"SI","dataincasso":"10/02/2026","note":""},{"nfatt":"8","datafatt":"13/02/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","cat":"Italia","pagam":"IRD","rata":"","scad":"13/02/2026","importo":3055,"incassato":"SI","dataincasso":"20/02/2026","note":""},{"nfatt":"600002","datafatt":"18/02/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","cat":"Extra UE","pagam":"ERD","rata":"","scad":"18/02/2026","importo":10280,"incassato":"SI","dataincasso":"18/02/2026","note":""},{"nfatt":"9","datafatt":"24/02/2026","codcli":"C0326","cliente":"BARONE COSTRUZIONI S.R.L.","cat":"Italia","pagam":"IPA","rata":"","scad":"24/02/2026","importo":927.2,"incassato":"SI","dataincasso":"16/02/2026","note":""},{"nfatt":"10","datafatt":"24/02/2026","codcli":"C0259","cliente":"MORANI SRL","cat":"Italia","pagam":"IPA","rata":"","scad":"24/02/2026","importo":5185,"incassato":"SI","dataincasso":"05/02/2026","note":""},{"nfatt":"6","datafatt":"31/01/2026","codcli":"C0324","cliente":"COGIFE SRL DI BALDELLI E FIGLI","cat":"Italia","pagam":"R16","rata":"1","scad":"28/02/2026","importo":11410.66,"incassato":"SI","dataincasso":"28/02/2026","note":""},{"nfatt":"15","datafatt":"28/02/2026","codcli":"C0282","cliente":"FEDBART SRLS","cat":"Italia","pagam":"BON","rata":"","scad":"28/02/2026","importo":33091.28,"incassato":"SI","dataincasso":"06/03/2026","note":""},{"nfatt":"16","datafatt":"11/03/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","cat":"Italia","pagam":"RID","rata":"","scad":"11/03/2026","importo":2860,"incassato":"SI","dataincasso":"19/03/2026","note":""},{"nfatt":"17","datafatt":"13/03/2026","codcli":"C0330","cliente":"GLG SRL","cat":"Italia","pagam":"IRD","rata":"","scad":"13/03/2026","importo":939.4,"incassato":"SI","dataincasso":"17/03/2026","note":""},{"nfatt":"18","datafatt":"13/03/2026","codcli":"C0330","cliente":"GLG SRL","cat":"Italia","pagam":"IRD","rata":"","scad":"13/03/2026","importo":122,"incassato":"SI","dataincasso":"17/03/2026","note":""},{"nfatt":"500012","datafatt":"13/03/2026","codcli":"D0118","cliente":"SAS PRO FOND","cat":"UE","pagam":"FRD","rata":"","scad":"13/03/2026","importo":1460,"incassato":"SI","dataincasso":"15/04/2026","note":""},{"nfatt":"19","datafatt":"16/03/2026","codcli":"C0330","cliente":"GLG SRL","cat":"Italia","pagam":"IRD","rata":"","scad":"16/03/2026","importo":305,"incassato":"SI","dataincasso":"17/03/2026","note":""},{"nfatt":"20","datafatt":"16/03/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","cat":"Italia","pagam":"BON","rata":"","scad":"16/03/2026","importo":7686,"incassato":"SI","dataincasso":"18/03/2026","note":""},{"nfatt":"500013","datafatt":"16/03/2026","codcli":"D0419","cliente":"HUNTRAC KERESKEDELMI KORLATOLT","cat":"UE","pagam":"EPA","rata":"","scad":"16/03/2026","importo":2422.32,"incassato":"SI","dataincasso":"05/03/2026","note":""},{"nfatt":"21","datafatt":"20/03/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","cat":"Italia","pagam":"IRD","rata":"","scad":"20/03/2026","importo":2255,"incassato":"SI","dataincasso":"31/03/2026","note":""},{"nfatt":"22","datafatt":"24/03/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","cat":"Italia","pagam":"BON","rata":"","scad":"24/03/2026","importo":7320,"incassato":"SI","dataincasso":"30/03/2026","note":""},{"nfatt":"23","datafatt":"25/03/2026","codcli":"C0330","cliente":"GLG SRL","cat":"Italia","pagam":"IRD","rata":"","scad":"25/03/2026","importo":103.7,"incassato":"SI","dataincasso":"27/03/2026","note":""},{"nfatt":"500003","datafatt":"25/02/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","cat":"UE","pagam":"FB1","rata":"","scad":"25/03/2026","importo":11970,"incassato":"SI","dataincasso":"16/04/2026","note":"60 giorni"},{"nfatt":"500004","datafatt":"","codcli":"D0116","cliente":"SARL CAZES JACQUES","cat":"UE","pagam":"","rata":"2","scad":"25/03/2026","importo":7887,"incassato":"SI","dataincasso":"07/04/2026","note":""},{"nfatt":"6","datafatt":"","codcli":"C0324","cliente":"COGIFE SRL DI BALDELLI E FIGLI","cat":"Italia","pagam":"","rata":"2","scad":"31/03/2026","importo":11410.66,"incassato":"SI","dataincasso":"31/03/2026","note":""},{"nfatt":"7","datafatt":"31/01/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","cat":"Italia","pagam":"RI2","rata":"","scad":"31/03/2026","importo":4715,"incassato":"SI","dataincasso":"31/03/2026","note":""},{"nfatt":"12","datafatt":"28/02/2026","codcli":"C0283","cliente":"IMT SRL","cat":"Italia","pagam":"R16","rata":"1","scad":"31/03/2026","importo":379,"incassato":"SI","dataincasso":"31/03/2026","note":""},{"nfatt":"29","datafatt":"31/03/2026","codcli":"C0282","cliente":"FEDBART SRLS","cat":"Italia","pagam":"BON","rata":"","scad":"31/03/2026","importo":39377.94,"incassato":"SI","dataincasso":"07/04/2026","note":""},{"nfatt":"30","datafatt":"31/03/2026","codcli":"C0331","cliente":"BAZZOCCHI SRL","cat":"Italia","pagam":"BON","rata":"","scad":"31/03/2026","importo":3660,"incassato":"SI","dataincasso":"18/03/2026","note":""},{"nfatt":"14","datafatt":"28/02/2026","codcli":"C0156","cliente":"CIANCALEONI SRL","cat":"Italia","pagam":"RI4","rata":"1","scad":"10/04/2026","importo":42156.5,"incassato":"SI","dataincasso":"10/04/2026","note":""},{"nfatt":"500010","datafatt":"11/03/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","cat":"UE","pagam":"FB1","rata":"","scad":"11/04/2026","importo":7220,"incassato":"NO","dataincasso":"","note":"60 giorni"},{"nfatt":"500011","datafatt":"13/03/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","cat":"UE","pagam":"FB1","rata":"","scad":"13/04/2026","importo":1100,"incassato":"NO","dataincasso":"","note":"60 giorni"},{"nfatt":"24","datafatt":"27/03/2026","codcli":"C0156","cliente":"CIANCALEONI SRL","cat":"Italia","pagam":"RI4","rata":"1","scad":"25/04/2026","importo":45882.57,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500014","datafatt":"25/03/2026","codcli":"D0414","cliente":"TECNICAS PARA O.P","cat":"UE","pagam":"SB5","rata":"","scad":"25/04/2026","importo":1600,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500015","datafatt":"25/03/2026","codcli":"D0414","cliente":"TECNICAS PARA O.P","cat":"UE","pagam":"SB5","rata":"","scad":"25/04/2026","importo":4940,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"12","datafatt":"","codcli":"C0283","cliente":"IMT SRL","cat":"Italia","pagam":"","rata":"2","scad":"30/04/2026","importo":379,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"13","datafatt":"28/02/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","cat":"Italia","pagam":"RI2","rata":"","scad":"30/04/2026","importo":9225,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"27","datafatt":"31/03/2026","codcli":"C0329","cliente":"ESCAVAZIONI TRIVELLAZIONI","cat":"Italia","pagam":"RI1","rata":"","scad":"30/04/2026","importo":186.66,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"28","datafatt":"31/03/2026","codcli":"C0260","cliente":"BELLUMORE GIOVANNI","cat":"Italia","pagam":"RI4","rata":"1","scad":"30/04/2026","importo":6835.66,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500005","datafatt":"25/02/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","cat":"UE","pagam":"FB4","rata":"","scad":"30/04/2026","importo":7140,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500006","datafatt":"25/02/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","cat":"UE","pagam":"FB4","rata":"","scad":"30/04/2026","importo":1200,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500007","datafatt":"04/03/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","cat":"UE","pagam":"FB4","rata":"","scad":"30/04/2026","importo":7140,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500009","datafatt":"06/03/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","cat":"UE","pagam":"FB4","rata":"","scad":"30/04/2026","importo":1200,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500008","datafatt":"04/03/2026","codcli":"D0021","cliente":"SAS BOTTE FONDATIONS","cat":"UE","pagam":"FB2","rata":"","scad":"04/05/2026","importo":740,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"14","datafatt":"","codcli":"C0156","cliente":"CIANCALEONI SRL","cat":"Italia","pagam":"","rata":"2","scad":"10/05/2026","importo":42156.5,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"24","datafatt":"","codcli":"C0156","cliente":"CIANCALEONI SRL","cat":"Italia","pagam":"","rata":"2","scad":"25/05/2026","importo":45882.57,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"500016","datafatt":"27/03/2026","codcli":"D0022","cliente":"SAS GRANGER FONDATIONS","cat":"UE","pagam":"FB2","rata":"","scad":"27/05/2026","importo":40390,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"28","datafatt":"","codcli":"C0260","cliente":"BELLUMORE GIOVANNI","cat":"Italia","pagam":"","rata":"2","scad":"30/05/2026","importo":6835.66,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"11","datafatt":"28/02/2026","codcli":"C0225","cliente":"GEAX SRL","cat":"Italia","pagam":"RI5","rata":"","scad":"31/05/2026","importo":27087.66,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"25","datafatt":"31/03/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","cat":"Italia","pagam":"RI2","rata":"","scad":"31/05/2026","importo":4455,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"26","datafatt":"31/03/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","cat":"Italia","pagam":"RI2","rata":"","scad":"31/05/2026","importo":11545,"incassato":"NO","dataincasso":"","note":""},{"nfatt":"24","datafatt":"","codcli":"C0156","cliente":"CIANCALEONI SRL","cat":"Italia","pagam":"","rata":"3","scad":"25/06/2026","importo":45882.58,"incassato":"NO","dataincasso":"","note":""}];
+
+const FATT_DATA = [{"cat":"Italia","nfatt":"1","data":"19/01/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"BON","imponibile":3015,"iva":0,"totale":3015,"saldo":3015},{"cat":"Italia","nfatt":"2","data":"23/01/2026","codcli":"C0282","cliente":"FEDBART SRLS","pagam":"BON","imponibile":29910.48,"iva":6580.31,"totale":36490.79,"saldo":36490.79},{"cat":"Italia","nfatt":"3","data":"23/01/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","pagam":"BON","imponibile":19310,"iva":4248.2,"totale":23558.2,"saldo":23558.2},{"cat":"Italia","nfatt":"4","data":"30/01/2026","codcli":"C0308","cliente":"FRANCUCCI SRL","pagam":"BON","imponibile":303,"iva":66.66,"totale":369.66,"saldo":369.66},{"cat":"Italia","nfatt":"5","data":"30/01/2026","codcli":"C0282","cliente":"FEDBART SRLS","pagam":"BON","imponibile":24651.32,"iva":5423.29,"totale":30074.61,"saldo":30074.61},{"cat":"Italia","nfatt":"6","data":"31/01/2026","codcli":"C0324","cliente":"COGIFE SRL DI BALDELLI E FIGLI","pagam":"R16","imponibile":18706,"iva":4115.32,"totale":22821.32,"saldo":22821.32},{"cat":"Italia","nfatt":"7","data":"31/01/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":4713,"iva":0,"totale":4715,"saldo":4715},{"cat":"Italia","nfatt":"8","data":"13/02/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"IRD","imponibile":3055,"iva":0,"totale":3055,"saldo":3055},{"cat":"Italia","nfatt":"9","data":"24/02/2026","codcli":"C0326","cliente":"BARONE COSTRUZIONI S.R.L.","pagam":"IPA","imponibile":760,"iva":167.2,"totale":927.2,"saldo":927.2},{"cat":"Italia","nfatt":"10","data":"24/02/2026","codcli":"C0259","cliente":"MORANI SRL","pagam":"IPA","imponibile":4250,"iva":935,"totale":5185,"saldo":5185},{"cat":"Italia","nfatt":"11","data":"28/02/2026","codcli":"C0225","cliente":"GEAX SRL","pagam":"RI5","imponibile":22203,"iva":4884.66,"totale":27087.66,"saldo":27087.66},{"cat":"Italia","nfatt":"12","data":"28/02/2026","codcli":"C0283","cliente":"IMT SRL","pagam":"R16","imponibile":756,"iva":0,"totale":758,"saldo":758},{"cat":"Italia","nfatt":"13","data":"28/02/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":9223,"iva":0,"totale":9225,"saldo":9225},{"cat":"Italia","nfatt":"14","data":"28/02/2026","codcli":"C0156","cliente":"CIANCALEONI SRL","pagam":"RI4","imponibile":84311,"iva":0,"totale":84313,"saldo":84313},{"cat":"Italia","nfatt":"15","data":"28/02/2026","codcli":"C0282","cliente":"FEDBART SRLS","pagam":"BON","imponibile":27124,"iva":5967.28,"totale":33091.28,"saldo":33091.28},{"cat":"Italia","nfatt":"16","data":"11/03/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"RID","imponibile":2860,"iva":0,"totale":2860,"saldo":2860},{"cat":"Italia","nfatt":"17","data":"13/03/2026","codcli":"C0330","cliente":"GLG SRL","pagam":"IRD","imponibile":770,"iva":169.4,"totale":939.4,"saldo":939.4},{"cat":"Italia","nfatt":"18","data":"13/03/2026","codcli":"C0330","cliente":"GLG SRL","pagam":"IRD","imponibile":100,"iva":22,"totale":122,"saldo":122},{"cat":"Italia","nfatt":"19","data":"16/03/2026","codcli":"C0330","cliente":"GLG SRL","pagam":"IRD","imponibile":250,"iva":55,"totale":305,"saldo":305},{"cat":"Italia","nfatt":"20","data":"16/03/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","pagam":"BON","imponibile":6300,"iva":1386,"totale":7686,"saldo":7686},{"cat":"Italia","nfatt":"21","data":"20/03/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"IRD","imponibile":2255,"iva":0,"totale":2255,"saldo":2255},{"cat":"Italia","nfatt":"22","data":"24/03/2026","codcli":"C0305","cliente":"HI-TECH METAL SRL","pagam":"BON","imponibile":6000,"iva":1320,"totale":7320,"saldo":7320},{"cat":"Italia","nfatt":"23","data":"25/03/2026","codcli":"C0330","cliente":"GLG SRL","pagam":"IRD","imponibile":85,"iva":18.7,"totale":103.7,"saldo":103.7},{"cat":"Italia","nfatt":"24","data":"27/03/2026","codcli":"C0156","cliente":"CIANCALEONI SRL","pagam":"RI4","imponibile":112826,"iva":24821.72,"totale":137647.72,"saldo":137647.72},{"cat":"Italia","nfatt":"25","data":"31/03/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":4453,"iva":0,"totale":4455,"saldo":4455},{"cat":"Italia","nfatt":"26","data":"31/03/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":11543,"iva":0,"totale":11545,"saldo":11545},{"cat":"Italia","nfatt":"27","data":"31/03/2026","codcli":"C0329","cliente":"ESCAVAZIONI TRIVELLAZIONI","pagam":"RI1","imponibile":153,"iva":33.66,"totale":186.66,"saldo":186.66},{"cat":"Italia","nfatt":"28","data":"31/03/2026","codcli":"C0260","cliente":"BELLUMORE GIOVANNI","pagam":"RI4","imponibile":11206,"iva":2465.32,"totale":13671.32,"saldo":13671.32},{"cat":"Italia","nfatt":"29","data":"31/03/2026","codcli":"C0282","cliente":"FEDBART SRLS","pagam":"BON","imponibile":32277,"iva":7100.94,"totale":39377.94,"saldo":39377.94},{"cat":"Italia","nfatt":"30","data":"31/03/2026","codcli":"C0331","cliente":"BAZZOCCHI SRL","pagam":"BON","imponibile":3000,"iva":660,"totale":3660,"saldo":3660},{"cat":"Italia","nfatt":"31","data":"14/04/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"RID","imponibile":2943.2,"iva":0,"totale":2943.2,"saldo":2943.2},{"cat":"Italia","nfatt":"33","data":"17/04/2026","codcli":"C0013","cliente":"MAZZIERI MICHELE E F.LLI SNC","pagam":"RID","imponibile":1223.6,"iva":0,"totale":1223.6,"saldo":1223.6},{"cat":"Italia","nfatt":"34","data":"29/04/2026","codcli":"C0156","cliente":"CIANCALEONI SRL","pagam":"RI4","imponibile":91617,"iva":0,"totale":91619,"saldo":91619},{"cat":"Italia","nfatt":"35","data":"30/04/2026","codcli":"C0332","cliente":"GIORGIO NOVARA S.R.L.","pagam":"RI2","imponibile":8563,"iva":1883.86,"totale":10446.86,"saldo":10446.86},{"cat":"Italia","nfatt":"36","data":"30/04/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":703,"iva":0,"totale":705,"saldo":705},{"cat":"Italia","nfatt":"37","data":"30/04/2026","codcli":"C0288","cliente":"TONTI TRADING SRL","pagam":"RI2","imponibile":19323,"iva":0,"totale":19325,"saldo":19325},{"cat":"Italia","nfatt":"38","data":"30/04/2026","codcli":"C0282","cliente":"FEDBART SRLS","pagam":"BON","imponibile":25530.52,"iva":5616.71,"totale":31147.23,"saldo":31147.23},{"cat":"UE","nfatt":"500001","data":"09/01/2026","codcli":"D0417","cliente":"MALTA PILING & DRILLING","pagam":"EB1","imponibile":6628,"iva":0,"totale":6628,"saldo":6628},{"cat":"UE","nfatt":"500002","data":"09/02/2026","codcli":"D0419","cliente":"HUNTRAC KERESKEDELMI KORLATOLT","pagam":"EPA","imponibile":397.5,"iva":0,"totale":397.5,"saldo":397.5},{"cat":"UE","nfatt":"500003","data":"25/02/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","pagam":"FB1","imponibile":11970,"iva":0,"totale":11970,"saldo":11970},{"cat":"UE","nfatt":"500004","data":"25/02/2026","codcli":"D0116","cliente":"SARL CAZES JACQUES","pagam":"FCC","imponibile":10710,"iva":0,"totale":10710,"saldo":10710},{"cat":"UE","nfatt":"500005","data":"25/02/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","pagam":"FB4","imponibile":7140,"iva":0,"totale":7140,"saldo":7140},{"cat":"UE","nfatt":"500006","data":"25/02/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","pagam":"FB4","imponibile":1200,"iva":0,"totale":1200,"saldo":1200},{"cat":"UE","nfatt":"500007","data":"04/03/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","pagam":"FB4","imponibile":7140,"iva":0,"totale":7140,"saldo":7140},{"cat":"UE","nfatt":"500008","data":"04/03/2026","codcli":"D0021","cliente":"SAS BOTTE FONDATIONS","pagam":"FB2","imponibile":740,"iva":0,"totale":740,"saldo":740},{"cat":"UE","nfatt":"500009","data":"06/03/2026","codcli":"D0321","cliente":"NGE FONDATIONS SASU","pagam":"FB4","imponibile":1200,"iva":0,"totale":1200,"saldo":1200},{"cat":"UE","nfatt":"500010","data":"11/03/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","pagam":"FB1","imponibile":7220,"iva":0,"totale":7220,"saldo":7220},{"cat":"UE","nfatt":"500011","data":"13/03/2026","codcli":"FFB","cliente":"SA FRANKI FOUNDATIONS BEL","pagam":"FB1","imponibile":1100,"iva":0,"totale":1100,"saldo":1100},{"cat":"UE","nfatt":"500012","data":"13/03/2026","codcli":"D0118","cliente":"SAS PRO FOND","pagam":"FRD","imponibile":1460,"iva":0,"totale":1460,"saldo":1460},{"cat":"UE","nfatt":"500013","data":"16/03/2026","codcli":"D0419","cliente":"HUNTRAC KERESKEDELMI KORLATOLT","pagam":"EPA","imponibile":2422.32,"iva":0,"totale":2422.32,"saldo":2422.32},{"cat":"UE","nfatt":"500014","data":"25/03/2026","codcli":"D0414","cliente":"TECNICAS PARA O.P","pagam":"SB5","imponibile":1600,"iva":0,"totale":1600,"saldo":1600},{"cat":"UE","nfatt":"500015","data":"25/03/2026","codcli":"D0414","cliente":"TECNICAS PARA O.P","pagam":"SB5","imponibile":4940,"iva":0,"totale":4940,"saldo":4940},{"cat":"UE","nfatt":"500016","data":"27/03/2026","codcli":"D0022","cliente":"SAS GRANGER FONDATIONS","pagam":"FB2","imponibile":40390,"iva":0,"totale":40390,"saldo":40390},{"cat":"UE","nfatt":"500017","data":"22/04/2026","codcli":"D0118","cliente":"SAS PRO FOND","pagam":"FB2","imponibile":11950,"iva":0,"totale":11950,"saldo":11950},{"cat":"UE","nfatt":"500018","data":"29/04/2026","codcli":"D0021","cliente":"SAS BOTTE FONDATIONS","pagam":"FB2","imponibile":24820,"iva":0,"totale":24820,"saldo":24820},{"cat":"Extra UE","nfatt":"600001","data":"21/01/2026","codcli":"D0437","cliente":"SOLSIF MAROC SA","pagam":"CAD","imponibile":22130,"iva":0,"totale":22130,"saldo":22130},{"cat":"Extra UE","nfatt":"600002","data":"18/02/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","pagam":"ERD","imponibile":10280,"iva":0,"totale":10280,"saldo":10280},{"cat":"Extra UE","nfatt":"600003","data":"15/04/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","pagam":"ERD","imponibile":9890,"iva":0,"totale":9890,"saldo":9890},{"cat":"Extra UE","nfatt":"600004","data":"15/04/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","pagam":"ERD","imponibile":4460,"iva":0,"totale":4460,"saldo":4460},{"cat":"Extra UE","nfatt":"600005","data":"16/04/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","pagam":"ERD","imponibile":823.6,"iva":0,"totale":823.6,"saldo":823.6},{"cat":"Extra UE","nfatt":"600006","data":"29/04/2026","codcli":"D0409","cliente":"ITALIAN DRILLING","pagam":"ERD","imponibile":11430,"iva":0,"totale":11430,"saldo":11430}];
+
+function mapScad(raw) {
+  return raw.map(r => ({
+    ...r,
+    _nfatt:       r.nfatt,
+    _datafatt:    parseDate(r.datafatt),
+    _cliente:     r.cliente,
+    _codcli:      r.codcli,
+    _cat:         r.cat,
+    _pagam:       r.pagam,
+    _rata:        r.rata,
+    _scad:        parseDate(r.scad),
+    _importo:     r.importo,
+    _incassato:   r.incassato,
+    _dataincasso: parseDate(r.dataincasso),
+    _note:        r.note
+  }));
+}
+
+function mapFatt(raw) {
+  return raw.map(r => ({
+    ...r,
+    _cat:        r.cat,
+    _nfatt:      r.nfatt,
+    _data:       parseDate(r.data),
+    _codcli:     r.codcli,
+    _cliente:    r.cliente,
+    _pagam:      r.pagam,
+    _imponibile: r.imponibile,
+    _iva:        r.iva,
+    _totale:     r.totale,
+    _saldo:      r.saldo
+  }));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// State & helpers
+// ════════════════════════════════════════════════════════════════════════════
+const D = { scad: [], fatt: [] };
+let chDash = null, chCF = null;
+
+function parseNum(s) {
+  if (s === null || s === undefined || s === '') return 0;
+  return parseFloat(String(s).replace(/[€\s]/g,'').replace(/\./g,'').replace(',','.')) || 0;
+}
+
+function parseDate(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function fmt(n) {
+  return new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' €';
+}
+
+function fmtD(d) {
+  if (!d) return '—';
+  return d instanceof Date && !isNaN(d) ? d.toLocaleDateString('it-IT') : '—';
+}
+
+function mKey(d) {
+  if (!d || isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function mLabel(k) {
+  if (!k) return '';
+  const [y,m] = k.split('-');
+  return ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'][+m-1]+' '+y;
+}
+
+function catBadge(c) {
+  if (c==='Italia')   return `<span class="badge bg-blue">🇮🇹 Italia</span>`;
+  if (c==='UE')       return `<span class="badge bg-green">🇪🇺 UE</span>`;
+  if (c==='Extra UE') return `<span class="badge bg-orange">🌍 Extra UE</span>`;
+  return c ? `<span class="badge bg-gray">${c}</span>` : '';
+}
+
+function addOpts(selId, vals) {
+  const s = document.getElementById(selId);
+  while (s.options.length > 1) s.remove(1);
+  vals.forEach(v => { const o = new Option(v instanceof Array ? v[1] : v, v instanceof Array ? v[0] : v); s.add(o); });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Persistence
+// ════════════════════════════════════════════════════════════════════════════
+function save() {
+  localStorage.setItem('gdt_scad', JSON.stringify(D.scad));
+  localStorage.setItem('gdt_fatt', JSON.stringify(D.fatt));
+}
+
+function load() {
+  try {
+    const s = localStorage.getItem('gdt_scad'), f = localStorage.getItem('gdt_fatt');
+    if (s) { D.scad = JSON.parse(s); D.scad.forEach(r => { ['_scad','_datafatt','_dataincasso'].forEach(k => { if (r[k]) r[k] = new Date(r[k]); }); }); }
+    if (f) { D.fatt = JSON.parse(f); D.fatt.forEach(r => { if (r._data) r._data = new Date(r._data); }); }
+  } catch(e) { console.warn('Load error', e); }
+}
+
+function clearAll() {
+  if (!confirm('Ripristinare i dati originali dai file? I dati importati manualmente verranno rimossi.')) return;
+  localStorage.removeItem('gdt_scad'); localStorage.removeItem('gdt_fatt');
+  D.scad = mapScad(SCAD_DATA); D.fatt = mapFatt(FATT_DATA);
+  drawImportSummary(); alert('Dati ripristinati dai file originali.');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Navigation
+// ════════════════════════════════════════════════════════════════════════════
+const VIEWS = ['dashboard','scadenzario','fatture','cashflow','import'];
+const TITLES = { dashboard:'Dashboard', scadenzario:'Scadenzario Incassi', fatture:'Fatture Vendita', cashflow:'Cash Flow Mensile', import:'Importa Dati' };
+const RENDERS = { dashboard:drawDashboard, scadenzario:drawScad, fatture:drawFatt, cashflow:drawCF, import:drawImportSummary };
+
+function nav(v) {
+  VIEWS.forEach(x => {
+    document.getElementById('view-'+x).classList.toggle('active', x===v);
+    document.querySelectorAll('#sidebar nav a')[VIEWS.indexOf(x)].classList.toggle('active', x===v);
+  });
+  document.getElementById('pg-title').textContent = TITLES[v];
+  RENDERS[v]();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Import – Scadenzario
+// ════════════════════════════════════════════════════════════════════════════
+function importScad(input) {
+  const file = input.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const csv = XLSX.utils.sheet_to_csv(ws, {FS:';'});
+      parseScadCSV(csv);
+      document.getElementById('st-scad').innerHTML = `<span style="color:var(--success)">✓ ${D.scad.length} rate importate</span>`;
+      save(); drawImportSummary();
+    } catch(err) { document.getElementById('st-scad').innerHTML = `<span style="color:var(--danger)">✗ Errore: ${err.message}</span>`; }
+  };
+  rd.readAsBinaryString(file);
+  input.value = '';
+}
+
+function parseScadCSV(raw) {
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && l.replace(/;/g,'').trim());
+  let hi = -1;
+  for (let i = 0; i < Math.min(lines.length,10); i++) {
+    const l = lines[i].toLowerCase();
+    if (l.includes('n.fatt') || l.includes('scadenza') || l.includes('ragione sociale')) { hi = i; break; }
+  }
+  if (hi < 0) { alert('Header non trovato. Assicurati che il file sia quello corretto.'); return; }
+  const hdrs = lines[hi].split(';').map(h => h.replace(/"/g,'').trim());
+  const rows = [];
+  for (let i = hi+1; i < lines.length; i++) {
+    const cells = lines[i].split(';').map(c => c.replace(/"/g,'').trim());
+    const joined = cells.join('');
+    if (!joined || joined.startsWith('TOTALE') || joined.startsWith('Categorie') || joined.startsWith('Italia') || joined.startsWith('UE') || joined.startsWith('Extra')) continue;
+    const r = {};
+    hdrs.forEach((h,j) => r[h] = cells[j] || '');
+    r._nfatt      = r['N.Fatt.'] || r['N. Fatt.'] || r['NFatt'] || '';
+    r._datafatt   = parseDate(r['Data Fatt.'] || r['Data']);
+    r._cliente    = r['Ragione Sociale'] || r['Cliente'] || '';
+    r._codcli     = r['Cod.Cli.'] || r['Codice Cliente'] || '';
+    r._cat        = r['Cat.'] || r['Categoria'] || '';
+    r._pagam      = r['Pagam.'] || r['Pagamento'] || '';
+    r._rata       = r['Rata'] || '';
+    r._scad       = parseDate(r['Scadenza'] || r['Data Scadenza Rata']);
+    r._importo    = parseNum(r['Importo Rata (€)'] || r['Importo Rata'] || r['Importo']);
+    r._incassato  = (r['Incassato'] || '').toUpperCase().trim() === 'SI' ? 'SI' : 'NO';
+    r._dataincasso= parseDate(r['Data Incasso']);
+    r._note       = r['Note'] || '';
+    if (r._cliente || r._nfatt) rows.push(r);
+  }
+  D.scad = rows;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Import – Fatture
+// ════════════════════════════════════════════════════════════════════════════
+function importFatt(input) {
+  const file = input.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      D.fatt = rows.map(r => ({
+        ...r,
+        _cat:        r['Categoria'] || '',
+        _nfatt:      String(r['N. Fattura'] || r['N.Fattura'] || ''),
+        _data:       parseDate(String(r['Data'] || '')),
+        _codcli:     r['Codice Cliente'] || '',
+        _cliente:    r['Ragione Sociale'] || '',
+        _pagam:      r['Pagamento'] || '',
+        _imponibile: parseNum(r['Imponibile (€)'] || r['Imponibile']),
+        _iva:        parseNum(r['IVA (€)'] || r['IVA']),
+        _totale:     parseNum(r['Totale Documento (€)'] || r['Totale Documento']),
+        _saldo:      parseNum(r['Saldo da Pagare (€)'] || r['Saldo da Pagare']),
+      })).filter(r => r._cliente || r._nfatt);
+      document.getElementById('st-fatt').innerHTML = `<span style="color:var(--success)">✓ ${D.fatt.length} fatture importate</span>`;
+      save(); drawImportSummary();
+    } catch(err) { document.getElementById('st-fatt').innerHTML = `<span style="color:var(--danger)">✗ Errore: ${err.message}</span>`; }
+  };
+  rd.readAsBinaryString(file);
+  input.value = '';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Dashboard
+// ════════════════════════════════════════════════════════════════════════════
+function drawDashboard() {
+  const s = D.scad;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in30 = new Date(today); in30.setDate(in30.getDate()+30);
+
+  const tot   = s.reduce((a,r) => a+r._importo, 0);
+  const inc   = s.filter(r => r._incassato==='SI').reduce((a,r) => a+r._importo, 0);
+  const daInc = s.filter(r => r._incassato==='NO').reduce((a,r) => a+r._importo, 0);
+  const prox  = s.filter(r => r._incassato==='NO' && r._scad && r._scad>=today && r._scad<=in30);
+  const totP  = prox.reduce((a,r) => a+r._importo, 0);
+
+  const show = s.length ? fmt : () => '—';
+  document.getElementById('k-tot').textContent  = show(tot);
+  document.getElementById('k-nrate').textContent = `${s.length} rate`;
+  document.getElementById('k-inc').textContent  = show(inc);
+  document.getElementById('k-pct').textContent  = tot ? `${(inc/tot*100).toFixed(1)}% del totale` : '';
+  document.getElementById('k-da').textContent   = show(daInc);
+  document.getElementById('k-nopen').textContent = `${s.filter(r=>r._incassato==='NO').length} rate aperte`;
+  document.getElementById('k-30').textContent   = show(totP);
+  document.getElementById('k-n30').textContent  = `${prox.length} rate in scadenza`;
+
+  // Upcoming
+  const up = s.filter(r => r._incassato==='NO' && r._scad).sort((a,b)=>a._scad-b._scad).slice(0,10);
+  const upEl = document.getElementById('upcoming');
+  upEl.innerHTML = up.length ? up.map(r => {
+    const ov = r._scad < today;
+    return `<div class="up-row">
+      <div>
+        <div style="color:var(--muted);font-size:11px">${fmtD(r._scad)}</div>
+        <div style="font-weight:500;font-size:13px">${r._cliente}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:${ov?'var(--danger)':'var(--text)'}">${fmt(r._importo)}</div>
+        ${ov?'<div style="font-size:10px;color:var(--danger)">SCADUTA</div>':''}
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Nessuna scadenza aperta</div>';
+
+  // Chart
+  const byM = {};
+  s.forEach(r => {
+    const k = mKey(r._scad); if (!k) return;
+    if (!byM[k]) byM[k] = {inc:0, da:0};
+    r._incassato==='SI' ? byM[k].inc+=r._importo : byM[k].da+=r._importo;
+  });
+  const keys = Object.keys(byM).sort();
+  if (chDash) chDash.destroy();
+  const ctx = document.getElementById('ch-dash').getContext('2d');
+  chDash = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: keys.map(mLabel),
+      datasets: [
+        { label:'Incassato', data:keys.map(k=>byM[k].inc), backgroundColor:'#10b981bb', borderRadius:4 },
+        { label:'Da incassare', data:keys.map(k=>byM[k].da), backgroundColor:'#f59e0bbb', borderRadius:4 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'top'} },
+      scales:{
+        x:{ stacked:true, grid:{display:false} },
+        y:{ stacked:true, ticks:{ callback:v=>new Intl.NumberFormat('it-IT',{notation:'compact'}).format(v)+'€' } }
+      }
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Scadenzario
+// ════════════════════════════════════════════════════════════════════════════
+function drawScad() {
+  const s = D.scad;
+  if (!s.length) {
+    document.getElementById('scad-tb').innerHTML = `<tr><td colspan="10" class="empty">Nessun dato — vai su "Importa Dati" per caricare il file.</td></tr>`;
+    return;
+  }
+  // Populate filters once
+  const meseEl = document.getElementById('sf-mese');
+  if (meseEl.options.length === 1) addOpts('sf-mese', [...new Set(s.map(r=>mKey(r._scad)).filter(Boolean))].sort().map(k=>[k,mLabel(k)]));
+  const catEl = document.getElementById('sf-cat');
+  if (catEl.options.length === 1) addOpts('sf-cat', [...new Set(s.map(r=>r._cat).filter(Boolean))].sort());
+
+  const mF = meseEl.value, stF = document.getElementById('sf-stato').value, cF = catEl.value;
+  const q = document.getElementById('sf-q').value.toLowerCase();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const rows = s.filter(r =>
+    (!mF  || mKey(r._scad)===mF) &&
+    (!stF || r._incassato===stF) &&
+    (!cF  || r._cat===cF) &&
+    (!q   || r._cliente.toLowerCase().includes(q) || r._nfatt.toLowerCase().includes(q))
+  );
+
+  document.getElementById('scad-tb').innerHTML = rows.length ? rows.map(r => {
+    const ov = r._incassato==='NO' && r._scad && r._scad < today;
+    const badge = r._incassato==='SI'
+      ? `<span class="badge bg-green">✓ Incassato</span>`
+      : ov ? `<span class="badge bg-red">⚠ Scaduta</span>`
+           : `<span class="badge bg-orange">⏳ In attesa</span>`;
+    return `<tr>
+      <td><strong>${r._nfatt}</strong></td>
+      <td>${fmtD(r._datafatt)}</td>
+      <td>${r._cliente}</td>
+      <td>${catBadge(r._cat)}</td>
+      <td><span class="badge bg-gray">${r._pagam}</span></td>
+      <td style="text-align:center">${r._rata||'—'}</td>
+      <td style="color:${ov?'var(--danger)':'inherit'}">${fmtD(r._scad)}</td>
+      <td style="text-align:right;font-weight:600">${fmt(r._importo)}</td>
+      <td>${badge}</td>
+      <td>${r._incassato==='SI'?fmtD(r._dataincasso):'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="10" class="empty">Nessun risultato</td></tr>`;
+
+  document.getElementById('scad-cnt').textContent = `${rows.length} righe`;
+  document.getElementById('scad-tot').textContent = `Totale filtrato: ${fmt(rows.reduce((a,r)=>a+r._importo,0))}`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Fatture
+// ════════════════════════════════════════════════════════════════════════════
+function drawFatt() {
+  const f = D.fatt;
+  if (!f.length) {
+    document.getElementById('fatt-tb').innerHTML = `<tr><td colspan="10" class="empty">Nessun dato — vai su "Importa Dati" per caricare il file.</td></tr>`;
+    return;
+  }
+  const catEl = document.getElementById('ff-cat');
+  if (catEl.options.length===1) addOpts('ff-cat', [...new Set(f.map(r=>r._cat).filter(Boolean))].sort());
+  const meseEl = document.getElementById('ff-mese');
+  if (meseEl.options.length===1) addOpts('ff-mese', [...new Set(f.map(r=>mKey(r._data)).filter(Boolean))].sort().map(k=>[k,mLabel(k)]));
+
+  const cF = catEl.value, mF = meseEl.value, q = document.getElementById('ff-q').value.toLowerCase();
+  const rows = f.filter(r =>
+    (!cF || r._cat===cF) &&
+    (!mF || mKey(r._data)===mF) &&
+    (!q  || r._cliente.toLowerCase().includes(q) || r._nfatt.toLowerCase().includes(q))
+  );
+
+  document.getElementById('fatt-tb').innerHTML = rows.length ? rows.map(r => `<tr>
+    <td>${catBadge(r._cat)}</td>
+    <td><strong>${r._nfatt}</strong></td>
+    <td>${fmtD(r._data)}</td>
+    <td style="color:var(--muted)">${r._codcli}</td>
+    <td>${r._cliente}</td>
+    <td><span class="badge bg-gray">${r._pagam}</span></td>
+    <td style="text-align:right">${fmt(r._imponibile)}</td>
+    <td style="text-align:right;color:var(--muted)">${fmt(r._iva)}</td>
+    <td style="text-align:right;font-weight:600">${fmt(r._totale)}</td>
+    <td style="text-align:right;color:${r._saldo>0?'var(--warning)':'var(--success)'}">${fmt(r._saldo)}</td>
+  </tr>`).join('') : `<tr><td colspan="10" class="empty">Nessun risultato</td></tr>`;
+
+  document.getElementById('fatt-cnt').textContent = `${rows.length} fatture`;
+  document.getElementById('fatt-tot').textContent = `Totale: ${fmt(rows.reduce((a,r)=>a+r._totale,0))}`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Cash Flow Mensile
+// ════════════════════════════════════════════════════════════════════════════
+function drawCF() {
+  const s = D.scad;
+  const byM = {};
+  s.forEach(r => {
+    const k = mKey(r._scad); if (!k) return;
+    if (!byM[k]) byM[k] = {att:0,inc:0,da:0,n:0};
+    byM[k].att+=r._importo; byM[k].n++;
+    r._incassato==='SI' ? byM[k].inc+=r._importo : byM[k].da+=r._importo;
+  });
+  const keys = Object.keys(byM).sort();
+
+  // Cumulative line chart
+  let cInc=0, cAtt=0;
+  const dInc = keys.map(k=>{cInc+=byM[k].inc; return cInc;});
+  const dAtt = keys.map(k=>{cAtt+=byM[k].att; return cAtt;});
+  if (chCF) chCF.destroy();
+  const ctx = document.getElementById('ch-cf').getContext('2d');
+  chCF = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:keys.map(mLabel),
+      datasets:[
+        {label:'Atteso cumulato', data:dAtt, borderColor:'#94a3b8', borderDash:[6,3], fill:false, tension:.3, pointRadius:3},
+        {label:'Incassato cumulato', data:dInc, borderColor:'#10b981', backgroundColor:'#10b98120', fill:true, tension:.3, pointRadius:4, borderWidth:2}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{
+        x:{grid:{display:false}},
+        y:{ticks:{callback:v=>new Intl.NumberFormat('it-IT',{notation:'compact'}).format(v)+'€'}}
+      }
+    }
+  });
+
+  // Table
+  const totals = {att:0,inc:0,da:0,n:0};
+  const trs = keys.map(k=>{
+    const d=byM[k];
+    totals.att+=d.att; totals.inc+=d.inc; totals.da+=d.da; totals.n+=d.n;
+    return `<tr>
+      <td style="font-weight:600">${mLabel(k)}</td>
+      <td style="text-align:right">${fmt(d.att)}</td>
+      <td style="text-align:right;color:var(--success);font-weight:600">${fmt(d.inc)}</td>
+      <td style="text-align:right;color:${d.da>0?'var(--warning)':'var(--muted)'};font-weight:${d.da>0?600:400}">${fmt(d.da)}</td>
+      <td style="text-align:right;color:var(--muted)">${d.n}</td>
+    </tr>`;
+  });
+  trs.push(`<tr class="cf-total-row">
+    <td>TOTALE</td>
+    <td style="text-align:right">${fmt(totals.att)}</td>
+    <td style="text-align:right;color:var(--success)">${fmt(totals.inc)}</td>
+    <td style="text-align:right;color:${totals.da>0?'var(--warning)':'var(--muted)'}">${fmt(totals.da)}</td>
+    <td style="text-align:right;color:var(--muted)">${totals.n}</td>
+  </tr>`);
+  document.getElementById('cf-tb').innerHTML = trs.join('') ||
+    `<tr><td colspan="5" class="empty">Nessun dato. Importa il file scadenzario.</td></tr>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Import summary
+// ════════════════════════════════════════════════════════════════════════════
+function drawImportSummary() {
+  const s = D.scad, f = D.fatt;
+  const el = document.getElementById('imp-summary');
+  if (!s.length && !f.length) { el.innerHTML='<p style="color:var(--muted);font-size:13px">Nessun dato caricato.</p>'; return; }
+  const tS = s.reduce((a,r)=>a+r._importo,0);
+  const tF = f.reduce((a,r)=>a+r._totale,0);
+  el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="padding:14px;background:#f8fafc;border-radius:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">SCADENZARIO INCASSI</div>
+      <div style="font-size:20px;font-weight:700">${s.length} rate</div>
+      <div style="font-size:13px;margin-top:4px">Totale: <strong>${fmt(tS)}</strong></div>
+      <div style="font-size:12px;color:var(--muted)">Incassate: ${s.filter(r=>r._incassato==='SI').length} &nbsp;·&nbsp; Da incassare: ${s.filter(r=>r._incassato==='NO').length}</div>
+    </div>
+    <div style="padding:14px;background:#f8fafc;border-radius:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">FATTURE VENDITA</div>
+      <div style="font-size:20px;font-weight:700">${f.length} fatture</div>
+      <div style="font-size:13px;margin-top:4px">Totale: <strong>${fmt(tF)}</strong></div>
+      <div style="font-size:12px;color:var(--muted)">Italia: ${f.filter(r=>r._cat==='Italia').length} &nbsp;·&nbsp; UE: ${f.filter(r=>r._cat==='UE').length} &nbsp;·&nbsp; Extra UE: ${f.filter(r=>r._cat==='Extra UE').length}</div>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Potere d'acquisto
+// ════════════════════════════════════════════════════════════════════════════
+function calcPotere() {
+  const from = new Date(document.getElementById('c-from').value);
+  const to   = new Date(document.getElementById('c-to').value);
+  const amt  = parseFloat(document.getElementById('c-amt').value) || 0;
+  const el   = document.getElementById('c-res');
+  if (isNaN(from)||isNaN(to)||!amt) { el.style.display='none'; return; }
+  to.setHours(23,59,59);
+
+  const atteso = D.scad.filter(r=>r._scad&&r._scad>=from&&r._scad<=to).reduce((a,r)=>a+r._importo,0);
+  const incassato = D.scad.filter(r=>r._scad&&r._scad>=from&&r._scad<=to&&r._incassato==='SI').reduce((a,r)=>a+r._importo,0);
+
+  el.style.display='block';
+  el.className='calc-res';
+  if (incassato>=amt) {
+    el.classList.add('ok');
+    el.innerHTML=`✅ Sì. Già incassato nel periodo: <strong>${fmt(incassato)}</strong> — richiesto: ${fmt(amt)}`;
+  } else if (atteso>=amt) {
+    el.classList.add('warn');
+    el.innerHTML=`⚠️ Possibile, dipende dagli incassi. Atteso: <strong>${fmt(atteso)}</strong> · Già incassato: ${fmt(incassato)} · Richiesto: ${fmt(amt)}`;
+  } else {
+    el.classList.add('nok');
+    el.innerHTML=`❌ Liquidità insufficiente. Atteso nel periodo: <strong>${fmt(atteso)}</strong> — richiesto: ${fmt(amt)}`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════════════════════════
+document.getElementById('today').textContent = new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+load();
+// Se localStorage è vuoto, carica i dati embedded dai file
+if (!D.scad.length) D.scad = mapScad(SCAD_DATA);
+if (!D.fatt.length) D.fatt = mapFatt(FATT_DATA);
+drawDashboard();
+</script>
+</body>
+</html>
