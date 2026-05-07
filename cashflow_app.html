@@ -6,6 +6,7 @@
   <title>Cash Flow – Gaggiotti Drilling Tools</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -175,7 +176,10 @@
 <div id="main">
   <div id="topbar">
     <h2 id="pg-title">Dashboard</h2>
-    <span class="dt" id="today"></span>
+    <div style="display:flex;align-items:center;gap:16px">
+      <span id="db-status" style="font-size:12.5px;font-weight:600">⏳ Connessione…</span>
+      <span class="dt" id="today"></span>
+    </div>
   </div>
   <div id="content">
 
@@ -253,7 +257,7 @@
               <tr>
                 <th>N. Fatt.</th><th>Data Fatt.</th><th>Cliente</th><th>Cat.</th>
                 <th>Pagam.</th><th>Rata</th><th>Scadenza</th>
-                <th style="text-align:right">Importo</th><th>Stato</th><th>Data Incasso</th>
+                <th style="text-align:right">Importo</th><th>Stato</th><th>Data Incasso</th><th></th>
               </tr>
             </thead>
             <tbody id="scad-tb"></tbody>
@@ -344,9 +348,16 @@
         </div>
       </div>
       <div class="card" style="margin-top:20px">
+        <div class="ch"><h3>☁️ Sincronizzazione Supabase</h3></div>
+        <div class="cb" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <button id="btn-sync" class="btn btn-primary" onclick="syncToDB()">☁️ Carica dati su Supabase</button>
+          <span style="font-size:12.5px;color:var(--muted)">Prima sincronizzazione o dopo un import da file.</span>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px">
         <div class="ch">
           <h3>Dati attualmente caricati</h3>
-          <button class="btn btn-danger btn-sm" onclick="clearAll()">Cancella tutto</button>
+          <button class="btn btn-danger btn-sm" onclick="clearAll()">Ripristina embedded</button>
         </div>
         <div class="cb" id="imp-summary"><p style="color:var(--muted);font-size:13px">Nessun dato caricato.</p></div>
       </div>
@@ -688,6 +699,7 @@ function drawScad() {
       <td style="text-align:right;font-weight:600">${fmt(r._importo)}</td>
       <td>${badge}</td>
       <td>${r._incassato==='SI'?fmtD(r._dataincasso):'—'}</td>
+      <td>${r.id ? `<button class="btn btn-sm" style="background:${r._incassato==='SI'?'var(--danger-light)':'var(--success-light)'};color:${r._incassato==='SI'?'var(--danger)':'var(--success)'};border:none;cursor:pointer" onclick="toggleIncassato('${r.id}')">${r._incassato==='SI'?'↩ Annulla':'✓ Incassa'}</button>` : ''}</td>
     </tr>`;
   }).join('') : `<tr><td colspan="10" class="empty">Nessun risultato</td></tr>`;
 
@@ -850,14 +862,159 @@ function calcPotere() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Supabase
+// ════════════════════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://zinqieuhxenrbylpyvio.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppbnFpZXVoeGVucmJ5bHB5dmlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTkyODksImV4cCI6MjA5MzczNTI4OX0.spX1ZFayYrWq7TQ8YU4Q7-iMNIrnJWqAb3gbe4Fs94o';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+function toISO(d) {
+  if (!d || isNaN(d)) return null;
+  return d.toISOString().split('T')[0];
+}
+
+function setStatus(ok, msg) {
+  const el = document.getElementById('db-status');
+  el.textContent = ok ? '🟢 Supabase' : `🔴 ${msg || 'Offline'}`;
+  el.style.color = ok ? 'var(--success)' : 'var(--danger)';
+}
+
+function fromDBScad(r) {
+  return {
+    ...r,
+    _nfatt:       r.nfatt || '',
+    _datafatt:    r.datafatt ? new Date(r.datafatt) : null,
+    _cliente:     r.cliente || '',
+    _codcli:      r.codcli || '',
+    _cat:         r.cat || '',
+    _pagam:       r.pagam || '',
+    _rata:        r.rata || '',
+    _scad:        r.scad ? new Date(r.scad) : null,
+    _importo:     parseFloat(r.importo) || 0,
+    _incassato:   r.incassato ? 'SI' : 'NO',
+    _dataincasso: r.dataincasso ? new Date(r.dataincasso) : null,
+    _note:        r.note || ''
+  };
+}
+
+function fromDBFatt(r) {
+  return {
+    ...r,
+    _cat:        r.cat || '',
+    _nfatt:      r.nfatt || '',
+    _data:       r.data ? new Date(r.data) : null,
+    _codcli:     r.codcli || '',
+    _cliente:    r.cliente || '',
+    _pagam:      r.pagam || '',
+    _imponibile: parseFloat(r.imponibile) || 0,
+    _iva:        parseFloat(r.iva) || 0,
+    _totale:     parseFloat(r.totale) || 0,
+    _saldo:      parseFloat(r.saldo) || 0
+  };
+}
+
+function toDBScad(r) {
+  return {
+    nfatt:       r._nfatt || '',
+    rata:        r._rata || null,
+    datafatt:    toISO(r._datafatt),
+    codcli:      r._codcli || null,
+    cliente:     r._cliente || '',
+    cat:         r._cat || null,
+    pagam:       r._pagam || null,
+    scad:        toISO(r._scad),
+    importo:     r._importo || 0,
+    incassato:   r._incassato === 'SI',
+    dataincasso: toISO(r._dataincasso),
+    note:        r._note || null
+  };
+}
+
+function toDBFatt(r) {
+  return {
+    nfatt:           r._nfatt || '',
+    data:            toISO(r._data),
+    codcli:          r._codcli || null,
+    cliente:         r._cliente || '',
+    cat:             r._cat || null,
+    pagam:           r._pagam || null,
+    imponibile:      r._imponibile || 0,
+    iva:             r._iva || 0,
+    spese_trasporto: 0,
+    totale:          r._totale || 0,
+    saldo:           r._saldo || 0
+  };
+}
+
+async function loadFromDB() {
+  try {
+    const [{ data: sd, error: e1 }, { data: fd, error: e2 }] = await Promise.all([
+      sb.from('scadenzario').select('*').order('scad'),
+      sb.from('fatture_vendita').select('*').order('data')
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    D.scad = sd && sd.length ? sd.map(fromDBScad) : mapScad(SCAD_DATA);
+    D.fatt = fd && fd.length ? fd.map(fromDBFatt) : mapFatt(FATT_DATA);
+    setStatus(true);
+  } catch(err) {
+    console.warn('Supabase offline, uso dati embedded:', err.message);
+    if (!D.scad.length) D.scad = mapScad(SCAD_DATA);
+    if (!D.fatt.length) D.fatt = mapFatt(FATT_DATA);
+    setStatus(false, 'Offline');
+  }
+}
+
+async function syncToDB() {
+  const hasIDs = D.scad.some(r => r.id);
+  if (hasIDs && !confirm('I dati sono già su Supabase. Vuoi sovrascriverli con i dati attuali?')) return;
+  const btn = document.getElementById('btn-sync');
+  btn.textContent = '⏳ Caricamento…'; btn.disabled = true;
+  try {
+    const { error: e1 } = await sb.from('scadenzario').upsert(D.scad.map(toDBScad));
+    if (e1) throw e1;
+    const { error: e2 } = await sb.from('fatture_vendita').upsert(D.fatt.filter(r => r._totale > 0).map(toDBFatt));
+    if (e2) throw e2;
+    await loadFromDB();
+    drawImportSummary();
+    alert(`✅ Sincronizzazione completata: ${D.scad.length} rate, ${D.fatt.length} fatture.`);
+  } catch(err) {
+    alert('❌ Errore sincronizzazione: ' + err.message);
+  } finally {
+    btn.textContent = '☁️ Carica dati su Supabase'; btn.disabled = false;
+  }
+}
+
+async function toggleIncassato(id) {
+  const r = D.scad.find(x => x.id === id);
+  if (!r) return;
+  const nuovoStato = r._incassato !== 'SI';
+  const oggi = nuovoStato ? toISO(new Date()) : null;
+  try {
+    const { error } = await sb.from('scadenzario')
+      .update({ incassato: nuovoStato, dataincasso: oggi })
+      .eq('id', id);
+    if (error) throw error;
+    r._incassato   = nuovoStato ? 'SI' : 'NO';
+    r.incassato    = nuovoStato;
+    r._dataincasso = nuovoStato ? new Date() : null;
+    r.dataincasso  = oggi;
+    drawScad();
+    drawDashboard();
+  } catch(err) {
+    alert('Errore aggiornamento: ' + err.message);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Init
 // ════════════════════════════════════════════════════════════════════════════
 document.getElementById('today').textContent = new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-load();
-// Se localStorage è vuoto, carica i dati embedded dai file
-if (!D.scad.length) D.scad = mapScad(SCAD_DATA);
-if (!D.fatt.length) D.fatt = mapFatt(FATT_DATA);
-drawDashboard();
+(async () => {
+  await loadFromDB();
+  drawDashboard();
+  drawImportSummary();
+})();
 </script>
 </body>
 </html>
